@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+<head>
+</head>
+<body>
+   <h1>Collaborative Whiteboard App</h1>
+  
+  <table>
+        <tr>
+            <td>
+              <canvas id="myCanvas" width="150" height="150" style="border:1px solid #000000;"></canvas>
+            </td>
+            <td>
+                <form name="inputForm">
+                    <table>
+
+                            <tr>
+                                <th>Color</th>
+                                <td><input type="radio" name="color" value="#FF0000" checked="true">Red</td>
+                                <td><input type="radio" name="color" value="#0000FF">Blue</td>
+                                <td><input type="radio" name="color" value="#FF9900">Orange</td>
+                                <td><input type="radio" name="color" value="#33CC33">Green</td>
+                            </tr>
+
+                            <tr>
+                                <th>Shape</th>
+                                <td><input type="radio" name="shape" value="square" checked="true">Square</td>
+                                <td><input type="radio" name="shape" value="circle">Circle</td>
+                                <td> </td>
+                                <td> </td>
+                            </tr>
+                            <tr>
+                              <th> </th>
+                              <td><input type="submit" value="Send Snapshot" onclick="defineImageBinary(); return false;"></td>
+                              <td><input type="checkbox" id="instant" value="Online" checked="true">Online</td>
+                              <td> </td>
+                              <td> </td>
+                             </tr>
+
+                        </table>
+                </form>
+            </td>
+        </tr>
+    </table>
+  
+<script>
+  
+  var canvas = document.getElementById("myCanvas");
+  var context = canvas.getContext("2d");
+  canvas.addEventListener("click", defineImage, false);
+  
+  function getCurrentPos(evt) {
+    var rect = canvas.getBoundingClientRect();
+    return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+    };
+}
+            
+function defineImage(evt) {
+    var currentPos = getCurrentPos(evt);
+    
+    for (i = 0; i < document.inputForm.color.length; i++) {
+        if (document.inputForm.color[i].checked) {
+            var color = document.inputForm.color[i];
+            break;
+        }
+    }
+            
+    for (i = 0; i < document.inputForm.shape.length; i++) {
+        if (document.inputForm.shape[i].checked) {
+            var shape = document.inputForm.shape[i];
+            break;
+        }
+    }
+    
+    var json = JSON.stringify({
+        "shape": shape.value,
+        "color": color.value,
+        "coords": {
+            "x": currentPos.x,
+            "y": currentPos.y
+        }
+    });
+    drawImageText(json);
+    if (document.getElementById("instant").checked) {
+        sendText(json);
+    }
+}
+
+function drawImageText(image) {
+    console.log("drawImageText");
+    var json = JSON.parse(image);
+    context.fillStyle = json.color;
+    switch (json.shape) {
+    case "circle":
+        context.beginPath();
+        context.arc(json.coords.x, json.coords.y, 5, 0, 2 * Math.PI, false);
+        context.fill();
+        break;
+    case "square":
+    default:
+        context.fillRect(json.coords.x, json.coords.y, 10, 10);
+        break;
+    }
+}
+  
+  function drawImageBinary(blob) {
+    var bytes = new Uint8Array(blob);
+//    console.log('drawImageBinary (bytes.length): ' + bytes.length);
+    
+    var imageData = context.createImageData(canvas.width, canvas.height);
+    
+    for (var i=8; i<imageData.data.length; i++) {
+        imageData.data[i] = bytes[i];
+    }
+    context.putImageData(imageData, 0, 0);
+    
+    var img = document.createElement('img');
+    img.height = canvas.height;
+    img.width = canvas.width;
+    img.src = canvas.toDataURL();
+}
+                    
+function defineImageBinary() {
+    var image = context.getImageData(0, 0, canvas.width, canvas.height);
+    var buffer = new ArrayBuffer(image.data.length);
+    var bytes = new Uint8Array(buffer);
+    for (var i=0; i<bytes.length; i++) {
+        bytes[i] = image.data[i];
+    }
+    sendBinary(buffer);
+}
+  
+  var wsUri = "ws://localhost:8080/WhiteboardApp/whiteboardendpoint";
+  var websocket = new WebSocket(wsUri);
+  
+websocket.onmessage = function(evt) { onMessage(evt) };
+  
+  websocket.binaryType = "arraybuffer";
+
+function sendText(json) {
+    console.log("sending text: " + json);
+    websocket.send(json);
+}
+                
+function onMessage(evt) {
+    console.log("received: " + evt.data);
+    if (typeof evt.data == "string") {
+        drawImageText(evt.data);
+    } else {
+        drawImageBinary(evt.data);
+    }
+}
+  
+  function sendBinary(bytes) {
+    console.log("sending binary: " + Object.prototype.toString.call(bytes));
+    websocket.send(bytes);
+}
+ 
+  
+  </script>
+</body>
+
+</html>
